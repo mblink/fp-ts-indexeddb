@@ -1,0 +1,45 @@
+{
+  "name": "fp-ts-indexeddb",
+  "version": "0.0.1",
+  "description": "Simple FP-TS based wrapper around indexedDB",
+  "main": "dist/lib/index.js",
+  "module": "dist/es2015/index.js",
+  "types": "dist/es2015/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json && tsc -p tsconfig.commonjs.json",
+    "clean": "rimraf ./dist",
+    "lint:no-fix": "eslint --config='.eslintrc.js' './src/*.{ts,tsx}' './test/*.{ts,tsx}'",
+    "lint": "npm run lint:no-fix -- --fix",
+    "prepare": "npm run clean && npm run build",
+    "prepublishOnly": "npm run test -- --ci --silent && npm run lint:no-fix -- --max-warnings 0",
+    "test": "jest",
+    "test:watch": "jest --watch"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mblink/fp-ts-indexeddb.git"
+  },
+  "keywords": [
+    "fp-ts",
+    "indexedDB"
+  ],
+  "author": "jleider",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/mblink/fp-ts-indexeddb/issues"
+  },
+  "homepage": "https://github.com/mblink/fp-ts-indexeddb#readme",
+  "devDependencies": {
+    "@types/jest": "~27.0.2",
+    "@typescript-eslint/eslint-plugin": "~5.0.0",
+    "@typescript-eslint/parser": "~5.0.0",
+    "eslint": "~8.0.1",
+    "fp-ts": "^2.0.0",
+    "jest": "~27.2.5",
+    "ts-jest": "~27.0.6",
+    "typescript": "~4.4.4"
+  },
+  "peerDependencies": {
+    "fp-ts": ">= 2.0.0"
+  }
+}
