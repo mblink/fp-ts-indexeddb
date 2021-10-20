@@ -5,7 +5,7 @@
     "downlevelIteration": true,
     "forceConsistentCasingInFileNames": true,
     "isolatedModules": true,
-    "lib": ["es2015"],
+    "lib": ["ES2015", "DOM"],
     "module": "es2015",
     "moduleResolution": "node",
     "noEmitOnError": true,
