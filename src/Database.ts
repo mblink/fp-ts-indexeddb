@@ -1,7 +1,7 @@
+import * as E from 'fp-ts/lib/Either';
 import * as O from 'fp-ts/lib/Option';
 import * as R from 'fp-ts/lib/Record';
 import * as TE from 'fp-ts/lib/TaskEither';
-import * as E from 'fp-ts/lib/Either';
 
 import * as t from 'io-ts';
 import { pipe } from 'fp-ts/lib/function';
@@ -18,10 +18,13 @@ export type DBSchemas = DBSchema[];
 
 export type DatabaseInfo = { database: IDBDatabase, schema: DBSchema };
 
+export type IndexedDbError = DOMException | Error;
+
+const handlePromiseError = (e: unknown) => e as IndexedDbError;
 export const open = (
   dbName: string,
   schema: DBSchema,
-): TE.TaskEither<DOMException, DatabaseInfo> => {
+): TE.TaskEither<IndexedDbError, DatabaseInfo> => {
   const initDb = () => new Promise<DatabaseInfo>((resolve, reject) => {
     // eslint-disable-next-line no-undef
     const req = window.indexedDB.open(dbName, schema.version);
@@ -42,21 +45,21 @@ export const open = (
   });
   return TE.tryCatch(
     initDb,
-    (e: unknown) => e as DOMException,
+    handlePromiseError
   );
 };
 
 export const insert = <A>(
   db: DatabaseInfo,
   storeName: string,
-): (v: A) => TE.TaskEither<DOMException, A> => {
+): (v: A) => TE.TaskEither<IndexedDbError, A> => {
   return (v: A) => {
     const insertTransaction = () => new Promise<A>((resolve, reject) => {
       pipe(
         db.schema.stores,
         R.lookup(storeName),
         O.fold(
-          () => reject(new DOMException('Store not found')),
+          () => reject(new Error('Store not found')),
           (c) => {
             pipe(
               c.codec.decode(v),
@@ -79,7 +82,7 @@ export const insert = <A>(
     });
     return TE.tryCatch(
       insertTransaction,
-      (e: unknown) => e as DOMException,
+      handlePromiseError,
     );
   };
 };
@@ -87,14 +90,14 @@ export const insert = <A>(
 export const update = <A>(
   db: DatabaseInfo,
   storeName: string,
-): (v: A) => TE.TaskEither<DOMException, A> => {
+): (v: A) => TE.TaskEither<IndexedDbError, A> => {
   return (v: A) => {
     const insertTransaction = () => new Promise<A>((resolve, reject) => {
       pipe(
         db.schema.stores,
         R.lookup(storeName),
         O.fold(
-          () => reject(new DOMException('Store not found')),
+          () => reject(new Error('Store not found')),
           (c) => {
             pipe(
               c.codec.decode(v),
@@ -117,7 +120,7 @@ export const update = <A>(
     });
     return TE.tryCatch(
       insertTransaction,
-      (e: unknown) => e as DOMException,
+      handlePromiseError,
     );
   };
 };
@@ -135,24 +138,31 @@ export const get = <A>(
       pipe(
         db.schema.stores,
         R.lookup(storeName),
-        O.filter(c => t.array(c.codec).is(this.result)),
         O.fold(
-          () => reject('Codec validation error'),
-          () => resolve(this.result)
+          () => reject(new Error('Store not found')),
+          (s) => {
+            pipe(
+              t.array(s.codec).decode(this.result),
+              E.fold(
+                reject,
+                resolve
+              )
+            );
+          }
         )
       );
     });
   });
-  return TE.tryCatch<string | DOMException, A[]>(
+  return TE.tryCatch<IndexedDbError, A[]>(
     getTransaction,
-    (e: unknown) => typeof e === 'string' ? e : e as DOMException,
+    handlePromiseError,
   );
 };
 
 export const remove = (
   db: DatabaseInfo,
   storeName: string,
-): (v: IDBValidKey) => TE.TaskEither<DOMException, boolean> => {
+): (v: IDBValidKey) => TE.TaskEither<IndexedDbError, boolean> => {
   return (v: IDBValidKey) => {
     const insertTransaction = () => new Promise<boolean>((resolve, reject) => {
       const tx = db.database.transaction(storeName, 'readwrite');
@@ -165,7 +175,7 @@ export const remove = (
     });
     return TE.tryCatch(
       insertTransaction,
-      (e) => e as DOMException,
+      handlePromiseError,
     );
   };
 };
