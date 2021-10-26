@@ -5,10 +5,11 @@ import * as t from 'io-ts';
 import {
   DBSchema,
   get,
+  getAll,
   insert,
   open,
+  put,
   remove,
-  update
 } from '../src/Database';
 import { pipe } from 'fp-ts/lib/function';
 
@@ -51,16 +52,16 @@ describe('IndexedDb - Tests', () => {
           // Update
           const uUser: User = { id: 1, name: 'Jimmy' };
           await pipe(
-            db ? update<User>(db, 'users')(uUser) : dbErrorTe,
+            db ? put<User>(db, 'users')(uUser) : dbErrorTe,
             TE.match(
               fail,
               (v: User) => expect(v.name).toEqual(uUser.name),
             )
           )();
 
-          // Get
+          // Get All
           await pipe(
-            db ? get(db, 'users') : dbErrorTe,
+            db ? getAll<User>(db, 'users') : dbErrorTe,
             TE.match(
               fail,
               (rows) => {
@@ -71,6 +72,17 @@ describe('IndexedDb - Tests', () => {
                     expect(t.array(c).is(rows)).toBeTruthy();
                   })
                 );
+              },
+            )
+          )();
+
+          // Get
+          await pipe(
+            db ? get<User>(db, 'users')(1) : dbErrorTe,
+            TE.match(
+              fail,
+              (record) => {
+                expect(record.name).toEqual('Jimmy');
               },
             )
           )();
@@ -86,7 +98,7 @@ describe('IndexedDb - Tests', () => {
 
           // Get List Empty
           await pipe(
-            db ? get(db, 'users') : dbErrorTe,
+            db ? getAll(db, 'users') : dbErrorTe,
             TE.match(
               fail,
               (rows) => {
