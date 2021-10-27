@@ -7,7 +7,6 @@ import * as t from 'io-ts';
 import { pipe } from 'fp-ts/lib/function';
 
 type StoreName = string;
-
 type Store = { key: string, codec: t.Mixed };
 
 export type DBSchema = {
@@ -16,9 +15,7 @@ export type DBSchema = {
 };
 
 export type DBSchemas = DBSchema[];
-
 export type DatabaseInfo = { database: IDBDatabase, schema: DBSchema };
-
 export type IndexedDbError = DOMException | Error;
 
 const isError = (u: unknown): u is Error => typeof u === 'object' && u !== null && 'name' in u && 'message' in u;
@@ -26,15 +23,17 @@ const isDOMException = (u: unknown): u is DOMException => typeof u === 'object' 
 
 const handlePromiseError = (u: unknown): IndexedDbError => isError(u) || isDOMException(u) ? u : new Error(`Unhandled error: ${u}`);
 
+const getObjectStore = (db: DatabaseInfo, mode: IDBTransactionMode) => (storeName: string): IDBObjectStore =>
+  db.database.transaction(storeName, mode).objectStore(storeName);
 
 const findStore = (db: DatabaseInfo, storeName: string) => pipe(
   db.schema.stores,
   R.lookup(storeName)
 );
 
-const handleRequestError = <A>(req: IDBRequest<A>, fn: (error: DOMException | null) => void) => {
+const handleRequestError = <A>(req: IDBRequest<A>, fn: (error: O.Option<DOMException>) => void) => {
   req.addEventListener('error', function (this: IDBOpenDBRequest) {
-    fn(this.error);
+    fn(O.fromNullable(this.error));
   });
 };
 
@@ -62,9 +61,9 @@ export const open = (
 export const insert = <A>(
   db: DatabaseInfo,
   storeName: string,
-): (v: A) => TE.TaskEither<IndexedDbError, A> => {
-  return (v: A) => {
-    const insertTransaction = () => new Promise<A>((resolve, reject) => {
+) => (v: A): TE.TaskEither<IndexedDbError, A> =>
+  TE.tryCatch(
+    () => new Promise<A>((resolve, reject) => {
       pipe(
         findStore(db, storeName),
         O.fold(
@@ -84,20 +83,16 @@ export const insert = <A>(
           }
         )
       );
-    });
-    return TE.tryCatch(
-      insertTransaction,
-      handlePromiseError,
-    );
-  };
-};
+    }),
+    handlePromiseError,
+  );
 
 export const put = <A>(
   db: DatabaseInfo,
   storeName: string,
-): (v: A) => TE.TaskEither<IndexedDbError, A> => {
-  return (v: A) => {
-    const putTransaction = () => new Promise<A>((resolve, reject) => {
+) => (v: A): TE.TaskEither<IndexedDbError, A> =>
+  TE.tryCatch(
+    () => new Promise<A>((resolve, reject) => {
       pipe(
         findStore(db, storeName),
         O.fold(
@@ -117,55 +112,49 @@ export const put = <A>(
           }
         )
       );
-    });
-    return TE.tryCatch(
-      putTransaction,
-      handlePromiseError,
-    );
-  };
-};
+    }),
+    handlePromiseError,
+  );
 
 export const getAll = <A>(
   db: DatabaseInfo,
   storeName: string,
-) => {
-  const getTransaction = () => new Promise<A[]>((resolve, reject) => {
-    const objectStore = pipe(
-      storeName,
-      getObjectStore(db, 'readonly')
-    );
-    const req = objectStore.getAll();
-    req.addEventListener('success', function (this: ReturnType<typeof objectStore.getAll>) {
-      pipe(
-        findStore(db, storeName),
-        O.fold(
-          () => reject(new Error('Store not found')),
-          (s) => {
-            pipe(
-              t.array(s.codec).decode(this.result),
-              E.fold(
-                reject,
-                resolve
-              )
-            );
-          }
-        )
+) =>
+  TE.tryCatch<IndexedDbError, A[]>(
+    () => new Promise<A[]>((resolve, reject) => {
+      const objectStore = pipe(
+        storeName,
+        getObjectStore(db, 'readonly')
       );
-    });
-    handleRequestError(req, reject);
-  });
-  return TE.tryCatch<IndexedDbError, A[]>(
-    getTransaction,
+      const req = objectStore.getAll();
+      req.addEventListener('success', function (this: ReturnType<typeof objectStore.getAll>) {
+        pipe(
+          findStore(db, storeName),
+          O.fold(
+            () => reject(new Error('Store not found')),
+            (s) => {
+              pipe(
+                t.array(s.codec).decode(this.result),
+                E.fold(
+                  reject,
+                  resolve
+                )
+              );
+            }
+          )
+        );
+      });
+      handleRequestError(req, reject);
+    }),
     handlePromiseError,
   );
-};
 
 export const get = <A>(
   db: DatabaseInfo,
   storeName: string,
-): (v: IDBValidKey) => TE.TaskEither<IndexedDbError, A> => {
-  return (v: IDBValidKey) => {
-    const getTransaction = () => new Promise<A>((resolve, reject) => {
+) => (v: IDBValidKey): TE.TaskEither<IndexedDbError, A> =>
+  TE.tryCatch(
+    () => new Promise<A>((resolve, reject) => {
       const objectStore = pipe(
         storeName,
         getObjectStore(db, 'readonly')
@@ -190,42 +179,33 @@ export const get = <A>(
         );
       });
       handleRequestError(getRequest, reject);
-    });
-    return TE.tryCatch(
-      getTransaction,
-      handlePromiseError,
-    );
-  };
-};
+    }),
+    handlePromiseError,
+  );
+
 
 export const remove = (
   db: DatabaseInfo,
   storeName: string,
-): (v: IDBValidKey) => TE.TaskEither<IndexedDbError, boolean> => {
-  return (v: IDBValidKey) => {
-    const removeTransaction = () => new Promise<boolean>((resolve, reject) => {
+) => (v: IDBValidKey): TE.TaskEither<IndexedDbError, boolean> =>
+  TE.tryCatch(
+    () => new Promise<boolean>((resolve, reject) => {
       const removeRequest = getObjectStore(db, 'readwrite')(storeName).delete(v);
       removeRequest.addEventListener('success', () => resolve(true));
       handleRequestError(removeRequest, reject);
-    });
-    return TE.tryCatch(
-      removeTransaction,
-      handlePromiseError,
-    );
-  };
-};
+    }),
+    handlePromiseError,
+  );
 
 export const clearStore = (
   db: DatabaseInfo,
   storeName: string,
-): TE.TaskEither<IndexedDbError, boolean> => {
-  const clearTransaction = () => new Promise<boolean>((resolve, reject) => {
-    const clearRequest = getObjectStore(db, 'readwrite')(storeName).clear();
-    clearRequest.addEventListener('success', () => resolve(true));
-    handleRequestError(clearRequest, reject);
-  });
-  return TE.tryCatch(
-    clearTransaction,
+): TE.TaskEither<IndexedDbError, boolean> =>
+  TE.tryCatch(
+    () => new Promise<boolean>((resolve, reject) => {
+      const clearRequest = getObjectStore(db, 'readwrite')(storeName).clear();
+      clearRequest.addEventListener('success', () => resolve(true));
+      handleRequestError(clearRequest, reject);
+    }),
     handlePromiseError,
   );
-};
