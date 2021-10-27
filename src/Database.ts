@@ -74,11 +74,7 @@ export const insert = <A>(
               E.fold(
                 reject,
                 () => {
-                  const objectStore = pipe(
-                    storeName,
-                    getObjectStore(db, 'readwrite')
-                  );
-                  const addRequest = objectStore.add(v);
+                  const addRequest = getObjectStore(db, 'readwrite')(storeName).add(v);
                   addRequest.addEventListener('success', () => resolve(v));
                   handleRequestError(addRequest, reject);
                 }
@@ -111,11 +107,7 @@ export const put = <A>(
               E.fold(
                 reject,
                 (item: A) => {
-                  const objectStore = pipe(
-                    storeName,
-                    getObjectStore(db, 'readwrite')
-                  );
-                  const updateRequest = objectStore.put(item);
+                  const updateRequest = getObjectStore(db, 'readwrite')(storeName).put(item);
                   updateRequest.addEventListener('success', () => resolve(v));
                   handleRequestError(updateRequest, reject);
                 }
@@ -177,7 +169,6 @@ export const get = <A>(
         storeName,
         getObjectStore(db, 'readonly')
       );
-
       const getRequest = objectStore.get(v);
 
       getRequest.addEventListener('success', function (this: ReturnType<typeof objectStore.get>) {
@@ -212,11 +203,7 @@ export const remove = (
 ): (v: IDBValidKey) => TE.TaskEither<IndexedDbError, boolean> => {
   return (v: IDBValidKey) => {
     const removeTransaction = () => new Promise<boolean>((resolve, reject) => {
-      const objectStore = pipe(
-        storeName,
-        getObjectStore(db, 'readwrite')
-      );
-      const removeRequest = objectStore.delete(v);
+      const removeRequest = getObjectStore(db, 'readwrite')(storeName).delete(v);
       removeRequest.addEventListener('success', () => resolve(true));
       handleRequestError(removeRequest, reject);
     });
@@ -232,11 +219,7 @@ export const clearStore = (
   storeName: string,
 ): TE.TaskEither<IndexedDbError, boolean> => {
   const clearTransaction = () => new Promise<boolean>((resolve, reject) => {
-    const objectStore = pipe(
-      storeName,
-      getObjectStore(db, 'readwrite')
-    );
-    const clearRequest = objectStore.clear();
+    const clearRequest = getObjectStore(db, 'readwrite')(storeName).clear();
     clearRequest.addEventListener('success', () => resolve(true));
     handleRequestError(clearRequest, reject);
   });
