@@ -42,6 +42,8 @@
     "typescript": "~4.4.4"
   },
   "peerDependencies": {
-    "fp-ts": ">= 2.0.0"
+    "fp-ts": ">= 2.0.0",
+    "io-ts": ">= 2.2.16",
+    "typescript": ">= 4.2.3"
   }
 }

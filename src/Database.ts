@@ -7,6 +7,7 @@ import * as t from 'io-ts';
 import { pipe } from 'fp-ts/lib/function';
 
 type StoreName = string;
+
 type Store = { key: string, codec: t.Mixed };
 
 export type DBSchema = {
@@ -22,6 +23,20 @@ export type IndexedDbError = DOMException | Error;
 
 const handlePromiseError = (e: unknown) => e as IndexedDbError;
 
+const getObjectStore = (db: DatabaseInfo, mode: IDBTransactionMode) =>
+  (storeName: string): IDBObjectStore => db.database.transaction(storeName, mode).objectStore(storeName);
+
+const findStore = (db: DatabaseInfo, storeName: string) => pipe(
+  db.schema.stores,
+  R.lookup(storeName)
+);
+
+const handleRequestError = <A>(req: IDBRequest<A>, fn: (error: DOMException | null) => void) => {
+  req.addEventListener('error', function (this: IDBOpenDBRequest) {
+    fn(this.error);
+  });
+};
+
 export const open = (
   dbName: string,
   schema: DBSchema,
@@ -35,9 +50,7 @@ export const open = (
     );
 
     req.onsuccess = () => resolve({ database: req.result, schema: schema });
-    req.addEventListener('error', function (this: IDBOpenDBRequest) {
-      reject(this.error);
-    });
+    handleRequestError(req, reject);
   });
   return TE.tryCatch(
     initDb,
@@ -52,8 +65,7 @@ export const insert = <A>(
   return (v: A) => {
     const insertTransaction = () => new Promise<A>((resolve, reject) => {
       pipe(
-        db.schema.stores,
-        R.lookup(storeName),
+        findStore(db, storeName),
         O.fold(
           () => reject(new Error('Store not found')),
           (c) => {
@@ -62,13 +74,13 @@ export const insert = <A>(
               E.fold(
                 reject,
                 () => {
-                  const tx = db.database.transaction(storeName, 'readwrite');
-                  const objectStore = tx.objectStore(storeName);
+                  const objectStore = pipe(
+                    storeName,
+                    getObjectStore(db, 'readwrite')
+                  );
                   const addRequest = objectStore.add(v);
                   addRequest.addEventListener('success', () => resolve(v));
-                  addRequest.addEventListener('error', function (this: IDBOpenDBRequest) {
-                    reject(this.error);
-                  });
+                  handleRequestError(addRequest, reject);
                 }
               )
             );
@@ -90,8 +102,7 @@ export const put = <A>(
   return (v: A) => {
     const putTransaction = () => new Promise<A>((resolve, reject) => {
       pipe(
-        db.schema.stores,
-        R.lookup(storeName),
+        findStore(db, storeName),
         O.fold(
           () => reject(new Error('Store not found')),
           (c) => {
@@ -100,13 +111,13 @@ export const put = <A>(
               E.fold(
                 reject,
                 (item: A) => {
-                  const tx = db.database.transaction(storeName, 'readwrite');
-                  const objectStore = tx.objectStore(storeName);
+                  const objectStore = pipe(
+                    storeName,
+                    getObjectStore(db, 'readwrite')
+                  );
                   const updateRequest = objectStore.put(item);
                   updateRequest.addEventListener('success', () => resolve(v));
-                  updateRequest.addEventListener('error', function (this: IDBOpenDBRequest) {
-                    reject(this.error);
-                  });
+                  handleRequestError(updateRequest, reject);
                 }
               )
             );
@@ -126,14 +137,14 @@ export const getAll = <A>(
   storeName: string,
 ) => {
   const getTransaction = () => new Promise<A[]>((resolve, reject) => {
-    const tx = db.database.transaction(storeName, 'readonly');
-    const objectStore = tx.objectStore(storeName);
+    const objectStore = pipe(
+      storeName,
+      getObjectStore(db, 'readonly')
+    );
     const req = objectStore.getAll();
-    req.addEventListener('error', reject);
     req.addEventListener('success', function (this: ReturnType<typeof objectStore.getAll>) {
       pipe(
-        db.schema.stores,
-        R.lookup(storeName),
+        findStore(db, storeName),
         O.fold(
           () => reject(new Error('Store not found')),
           (s) => {
@@ -148,6 +159,7 @@ export const getAll = <A>(
         )
       );
     });
+    handleRequestError(req, reject);
   });
   return TE.tryCatch<IndexedDbError, A[]>(
     getTransaction,
@@ -161,13 +173,16 @@ export const get = <A>(
 ): (v: IDBValidKey) => TE.TaskEither<IndexedDbError, A> => {
   return (v: IDBValidKey) => {
     const getTransaction = () => new Promise<A>((resolve, reject) => {
-      const tx = db.database.transaction(storeName, 'readonly');
-      const objectStore = tx.objectStore(storeName);
+      const objectStore = pipe(
+        storeName,
+        getObjectStore(db, 'readonly')
+      );
+
       const getRequest = objectStore.get(v);
+
       getRequest.addEventListener('success', function (this: ReturnType<typeof objectStore.get>) {
         pipe(
-          db.schema.stores,
-          R.lookup(storeName),
+          findStore(db, storeName),
           O.fold(
             () => reject(new Error('Store not found')),
             (s) => {
@@ -182,9 +197,7 @@ export const get = <A>(
           )
         );
       });
-      getRequest.addEventListener('error', function (this: IDBOpenDBRequest) {
-        reject(this.error);
-      });
+      handleRequestError(getRequest, reject);
     });
     return TE.tryCatch(
       getTransaction,
@@ -199,13 +212,13 @@ export const remove = (
 ): (v: IDBValidKey) => TE.TaskEither<IndexedDbError, boolean> => {
   return (v: IDBValidKey) => {
     const removeTransaction = () => new Promise<boolean>((resolve, reject) => {
-      const tx = db.database.transaction(storeName, 'readwrite');
-      const objectStore = tx.objectStore(storeName);
+      const objectStore = pipe(
+        storeName,
+        getObjectStore(db, 'readwrite')
+      );
       const removeRequest = objectStore.delete(v);
       removeRequest.addEventListener('success', () => resolve(true));
-      removeRequest.addEventListener('error', function (this: IDBOpenDBRequest) {
-        reject(this.error);
-      });
+      handleRequestError(removeRequest, reject);
     });
     return TE.tryCatch(
       removeTransaction,
@@ -219,13 +232,13 @@ export const clearStore = (
   storeName: string,
 ): TE.TaskEither<IndexedDbError, boolean> => {
   const clearTransaction = () => new Promise<boolean>((resolve, reject) => {
-    const tx = db.database.transaction(storeName, 'readwrite');
-    const objectStore = tx.objectStore(storeName);
-    const removeRequest = objectStore.clear();
-    removeRequest.addEventListener('success', () => resolve(true));
-    removeRequest.addEventListener('error', function (this: IDBOpenDBRequest) {
-      reject(this.error);
-    });
+    const objectStore = pipe(
+      storeName,
+      getObjectStore(db, 'readwrite')
+    );
+    const clearRequest = objectStore.clear();
+    clearRequest.addEventListener('success', () => resolve(true));
+    handleRequestError(clearRequest, reject);
   });
   return TE.tryCatch(
     clearTransaction,
