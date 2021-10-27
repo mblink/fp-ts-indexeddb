@@ -21,10 +21,11 @@ export type DatabaseInfo = { database: IDBDatabase, schema: DBSchema };
 
 export type IndexedDbError = DOMException | Error;
 
-const handlePromiseError = (e: unknown) => e as IndexedDbError;
+const isError = (u: unknown): u is Error => typeof u === 'object' && u !== null && 'name' in u && 'message' in u;
+const isDOMException = (u: unknown): u is DOMException => typeof u === 'object' && u != null && 'code' in u && 'message' in u && 'name' in u;
 
-const getObjectStore = (db: DatabaseInfo, mode: IDBTransactionMode) =>
-  (storeName: string): IDBObjectStore => db.database.transaction(storeName, mode).objectStore(storeName);
+const handlePromiseError = (u: unknown): IndexedDbError => isError(u) || isDOMException(u) ? u : new Error(`Unhandled error: ${u}`);
+
 
 const findStore = (db: DatabaseInfo, storeName: string) => pipe(
   db.schema.stores,
