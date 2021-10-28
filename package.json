@@ -10,8 +10,7 @@
     "clean": "rimraf ./dist",
     "lint:no-fix": "eslint --config='.eslintrc.js' './src/*.{ts,tsx}' './test/*.{ts,tsx}'",
     "lint": "npm run lint:no-fix -- --fix",
-    "postinstall": "npm run build",
-    "prepublishOnly": "npm run postinstall && npm run test -- --ci --silent && npm run lint:no-fix -- --max-warnings 0",
+    "prepublishOnly": "npm run build && npm run test -- --ci --silent && npm run lint:no-fix -- --max-warnings 0",
     "test": "jest",
     "test:watch": "jest --watch"
   },
