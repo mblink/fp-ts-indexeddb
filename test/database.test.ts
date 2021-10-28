@@ -10,7 +10,7 @@ import {
   open,
   put,
   remove,
-} from '../src/Database';
+} from '../src/database';
 import { pipe } from 'fp-ts/lib/function';
 
 const userC = t.type({
