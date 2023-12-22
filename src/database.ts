@@ -4,6 +4,7 @@ import * as R from 'fp-ts/lib/Record';
 import * as TE from 'fp-ts/lib/TaskEither';
 
 import * as t from 'io-ts';
+import type { ReadonlyRecord } from 'fp-ts/lib/ReadonlyRecord';
 import { pipe } from 'fp-ts/lib/function';
 
 type StoreName = string;
@@ -11,10 +12,10 @@ type Store<StoreC extends t.Mixed> = { key: string, codec: StoreC };
 
 export type DBSchema<StoreC extends t.Mixed> = {
   version: number;
-  stores: Record<StoreName, Store<StoreC>>;
+  stores: ReadonlyRecord<StoreName, Store<StoreC>>;
 };
 
-export type DBSchemas<StoreC extends t.Mixed> = Array<DBSchema<StoreC>>;
+export type DBSchemas<StoreC extends t.Mixed> = ReadonlyArray<DBSchema<StoreC>>;
 export type DatabaseInfo<StoreC extends t.Mixed> = { database: IDBDatabase, schema: DBSchema<StoreC> };
 export type IndexedDbError = DOMException | Error;
 
