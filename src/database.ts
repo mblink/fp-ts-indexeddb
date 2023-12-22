@@ -69,8 +69,8 @@ export const insert = <StoreC extends t.Mixed>(
         findStore(db, storeName),
         O.fold(
           () => reject(new Error('Store not found')),
-          () => {
-            const addRequest = getObjectStore(db, 'readwrite')(storeName).add(v);
+          (store) => {
+            const addRequest = getObjectStore(db, 'readwrite')(storeName).add(store.codec.encode(v));
             addRequest.addEventListener('success', () => resolve(v));
             handleRequestError(addRequest, reject);
           }
@@ -90,18 +90,10 @@ export const put = <StoreC extends t.Mixed>(
         findStore(db, storeName),
         O.fold(
           () => reject(new Error('Store not found')),
-          (c) => {
-            pipe(
-              c.codec.decode(v),
-              E.fold(
-                reject,
-                (item: StoreC['_A']) => {
-                  const updateRequest = getObjectStore(db, 'readwrite')(storeName).put(item);
-                  updateRequest.addEventListener('success', () => resolve(v));
-                  handleRequestError(updateRequest, reject);
-                }
-              )
-            );
+          (store) => {
+            const updateRequest = getObjectStore(db, 'readwrite')(storeName).put(store.codec.encode(v));
+            updateRequest.addEventListener('success', () => resolve(v));
+            handleRequestError(updateRequest, reject);
           }
         )
       );
