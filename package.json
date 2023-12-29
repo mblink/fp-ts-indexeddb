@@ -1,6 +1,6 @@
 {
   "name": "fp-ts-indexeddb",
-  "version": "0.1.5",
+  "version": "0.2.0",
   "description": "Simple FP-TS based wrapper around indexedDB",
   "main": "dist/lib/index.js",
   "module": "dist/es2015/index.js",
@@ -27,7 +27,8 @@
   ],
   "contributors": [
     "Justin Leider https://github.com/jleider",
-    "Harim Tejada https://github.com/harimtejada"
+    "Harim Tejada https://github.com/harimtejada",
+    "Wolfgang Mcrae https://github.com/Wolfgang-stack"
   ],
   "license": "MIT",
   "bugs": {

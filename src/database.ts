@@ -4,18 +4,19 @@ import * as R from 'fp-ts/lib/Record';
 import * as TE from 'fp-ts/lib/TaskEither';
 
 import * as t from 'io-ts';
+import type { ReadonlyRecord } from 'fp-ts/lib/ReadonlyRecord';
 import { pipe } from 'fp-ts/lib/function';
 
 type StoreName = string;
-type Store = { key: string, codec: t.Mixed };
+type Store<StoreC extends t.Mixed> = { key: string, codec: StoreC };
 
-export type DBSchema = {
+export type DBSchema<StoreC extends t.Mixed> = {
   version: number;
-  stores: Record<StoreName, Store>;
+  stores: ReadonlyRecord<StoreName, Store<StoreC>>;
 };
 
-export type DBSchemas = DBSchema[];
-export type DatabaseInfo = { database: IDBDatabase, schema: DBSchema };
+export type DBSchemas<StoreC extends t.Mixed> = ReadonlyArray<DBSchema<StoreC>>;
+export type DatabaseInfo<StoreC extends t.Mixed> = { database: IDBDatabase, schema: DBSchema<StoreC> };
 export type IndexedDbError = DOMException | Error;
 
 const isError = (u: unknown): u is Error => typeof u === 'object' && u !== null && 'name' in u && 'message' in u;
@@ -23,10 +24,10 @@ const isDOMException = (u: unknown): u is DOMException => typeof u === 'object' 
 
 const handlePromiseError = (u: unknown): IndexedDbError => isError(u) || isDOMException(u) ? u : new Error(`Unhandled error: ${u}`);
 
-const getObjectStore = (db: DatabaseInfo, mode: IDBTransactionMode) => (storeName: string): IDBObjectStore =>
+const getObjectStore = <StoreC extends t.Mixed>(db: DatabaseInfo<StoreC>, mode: IDBTransactionMode) => (storeName: string): IDBObjectStore =>
   db.database.transaction(storeName, mode).objectStore(storeName);
 
-const findStore = (db: DatabaseInfo, storeName: string) => pipe(
+const findStore = <StoreC extends t.Mixed>(db: DatabaseInfo<StoreC>, storeName: string) => pipe(
   db.schema.stores,
   R.lookup(storeName)
 );
@@ -37,16 +38,16 @@ const handleRequestError = <A>(req: IDBRequest<A>, fn: (error: O.Option<DOMExcep
   });
 };
 
-export const open = (
+export const open = <StoreC extends t.Mixed>(
   dbName: string,
-  schema: DBSchema,
-): TE.TaskEither<IndexedDbError, DatabaseInfo> => {
-  const initDb = () => new Promise<DatabaseInfo>((resolve, reject) => {
+  schema: DBSchema<StoreC>,
+): TE.TaskEither<IndexedDbError, DatabaseInfo<StoreC>> => {
+  const initDb = () => new Promise<DatabaseInfo<StoreC>>((resolve, reject) => {
     // eslint-disable-next-line no-undef
     const req = window.indexedDB.open(dbName, schema.version);
     req.onupgradeneeded = () => pipe(
       schema.stores,
-      R.mapWithIndex((storeName: string, v: Store) => req.result.createObjectStore(storeName, { keyPath: v.key }))
+      R.mapWithIndex((storeName: string, v: Store<StoreC>) => req.result.createObjectStore(storeName, { keyPath: v.key }))
     );
 
     req.onsuccess = () => resolve({ database: req.result, schema: schema });
@@ -58,28 +59,20 @@ export const open = (
   );
 };
 
-export const insert = <A>(
-  db: DatabaseInfo,
+export const insert = <StoreC extends t.Mixed>(
+  db: DatabaseInfo<StoreC>,
   storeName: string,
-) => (v: A): TE.TaskEither<IndexedDbError, A> =>
+) => (v: StoreC['_A']): TE.TaskEither<IndexedDbError, StoreC['_A']> =>
   TE.tryCatch(
-    () => new Promise<A>((resolve, reject) => {
+    () => new Promise<StoreC['_A']>((resolve, reject) => {
       pipe(
         findStore(db, storeName),
         O.fold(
           () => reject(new Error('Store not found')),
-          (c) => {
-            pipe(
-              c.codec.decode(v),
-              E.fold(
-                reject,
-                () => {
-                  const addRequest = getObjectStore(db, 'readwrite')(storeName).add(v);
-                  addRequest.addEventListener('success', () => resolve(v));
-                  handleRequestError(addRequest, reject);
-                }
-              )
-            );
+          (store) => {
+            const addRequest = getObjectStore(db, 'readwrite')(storeName).add(store.codec.encode(v));
+            addRequest.addEventListener('success', () => resolve(v));
+            handleRequestError(addRequest, reject);
           }
         )
       );
@@ -87,28 +80,20 @@ export const insert = <A>(
     handlePromiseError,
   );
 
-export const put = <A>(
-  db: DatabaseInfo,
+export const put = <StoreC extends t.Mixed>(
+  db: DatabaseInfo<StoreC>,
   storeName: string,
-) => (v: A): TE.TaskEither<IndexedDbError, A> =>
+) => (v: StoreC['_A']): TE.TaskEither<IndexedDbError, StoreC['_A']> =>
   TE.tryCatch(
-    () => new Promise<A>((resolve, reject) => {
+    () => new Promise<StoreC['_A']>((resolve, reject) => {
       pipe(
         findStore(db, storeName),
         O.fold(
           () => reject(new Error('Store not found')),
-          (c) => {
-            pipe(
-              c.codec.decode(v),
-              E.fold(
-                reject,
-                (item: A) => {
-                  const updateRequest = getObjectStore(db, 'readwrite')(storeName).put(item);
-                  updateRequest.addEventListener('success', () => resolve(v));
-                  handleRequestError(updateRequest, reject);
-                }
-              )
-            );
+          (store) => {
+            const updateRequest = getObjectStore(db, 'readwrite')(storeName).put(store.codec.encode(v));
+            updateRequest.addEventListener('success', () => resolve(v));
+            handleRequestError(updateRequest, reject);
           }
         )
       );
@@ -116,12 +101,12 @@ export const put = <A>(
     handlePromiseError,
   );
 
-export const getAll = <A>(
-  db: DatabaseInfo,
+export const getAll = <StoreC extends t.Mixed>(
+  db: DatabaseInfo<StoreC>,
   storeName: string,
 ) =>
-  TE.tryCatch<IndexedDbError, A[]>(
-    () => new Promise<A[]>((resolve, reject) => {
+  TE.tryCatch<IndexedDbError, Array<StoreC['_A']>>(
+    () => new Promise<Array<StoreC['_A']>>((resolve, reject) => {
       const objectStore = pipe(
         storeName,
         getObjectStore(db, 'readonly')
@@ -149,12 +134,12 @@ export const getAll = <A>(
     handlePromiseError,
   );
 
-export const get = <A>(
-  db: DatabaseInfo,
+export const get = <StoreC extends t.Mixed>(
+  db: DatabaseInfo<StoreC>,
   storeName: string,
-) => (v: IDBValidKey): TE.TaskEither<IndexedDbError, A> =>
+) => (v: IDBValidKey): TE.TaskEither<IndexedDbError, StoreC['_A']> =>
   TE.tryCatch(
-    () => new Promise<A>((resolve, reject) => {
+    () => new Promise<StoreC['_A']>((resolve, reject) => {
       const objectStore = pipe(
         storeName,
         getObjectStore(db, 'readonly')
@@ -184,8 +169,8 @@ export const get = <A>(
   );
 
 
-export const remove = (
-  db: DatabaseInfo,
+export const remove = <StoreC extends t.Mixed>(
+  db: DatabaseInfo<StoreC>,
   storeName: string,
 ) => (v: IDBValidKey): TE.TaskEither<IndexedDbError, boolean> =>
   TE.tryCatch(
@@ -197,8 +182,8 @@ export const remove = (
     handlePromiseError,
   );
 
-export const clearStore = (
-  db: DatabaseInfo,
+export const clearStore = <StoreC extends t.Mixed>(
+  db: DatabaseInfo<StoreC>,
   storeName: string,
 ): TE.TaskEither<IndexedDbError, boolean> =>
   TE.tryCatch(
