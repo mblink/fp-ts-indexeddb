@@ -4,8 +4,11 @@ import * as R from 'fp-ts/lib/Record';
 import * as TE from 'fp-ts/lib/TaskEither';
 
 import * as t from 'io-ts';
+import { Mutex } from 'async-mutex';
 import type { ReadonlyRecord } from 'fp-ts/lib/ReadonlyRecord';
 import { pipe } from 'fp-ts/lib/function';
+
+const mutex = new Mutex();
 
 type StoreName = string;
 type Store<StoreC extends t.Mixed> = { key: string, codec: StoreC };
@@ -64,7 +67,7 @@ export const insert = <StoreC extends t.Mixed>(
   storeName: string,
 ) => (v: StoreC['_A']): TE.TaskEither<IndexedDbError, StoreC['_A']> =>
   TE.tryCatch(
-    () => new Promise<StoreC['_A']>((resolve, reject) => {
+    () => mutex.runExclusive(() => new Promise<StoreC['_A']>((resolve, reject) => {
       pipe(
         findStore(db, storeName),
         O.fold(
@@ -76,7 +79,7 @@ export const insert = <StoreC extends t.Mixed>(
           }
         )
       );
-    }),
+    })),
     handlePromiseError,
   );
 
@@ -85,7 +88,7 @@ export const put = <StoreC extends t.Mixed>(
   storeName: string,
 ) => (v: StoreC['_A']): TE.TaskEither<IndexedDbError, StoreC['_A']> =>
   TE.tryCatch(
-    () => new Promise<StoreC['_A']>((resolve, reject) => {
+    () => mutex.runExclusive(() => new Promise<StoreC['_A']>((resolve, reject) => {
       pipe(
         findStore(db, storeName),
         O.fold(
@@ -97,7 +100,7 @@ export const put = <StoreC extends t.Mixed>(
           }
         )
       );
-    }),
+    })),
     handlePromiseError,
   );
 
@@ -106,7 +109,7 @@ export const getAll = <StoreC extends t.Mixed>(
   storeName: string,
 ) =>
   TE.tryCatch<IndexedDbError, Array<StoreC['_A']>>(
-    () => new Promise<Array<StoreC['_A']>>((resolve, reject) => {
+    () => mutex.runExclusive(() => new Promise<Array<StoreC['_A']>>((resolve, reject) => {
       const objectStore = pipe(
         storeName,
         getObjectStore(db, 'readonly')
@@ -130,7 +133,7 @@ export const getAll = <StoreC extends t.Mixed>(
         );
       });
       handleRequestError(req, reject);
-    }),
+    })),
     handlePromiseError,
   );
 
@@ -139,7 +142,7 @@ export const get = <StoreC extends t.Mixed>(
   storeName: string,
 ) => (v: IDBValidKey): TE.TaskEither<IndexedDbError, StoreC['_A']> =>
   TE.tryCatch(
-    () => new Promise<StoreC['_A']>((resolve, reject) => {
+    () => mutex.runExclusive(() => new Promise<StoreC['_A']>((resolve, reject) => {
       const objectStore = pipe(
         storeName,
         getObjectStore(db, 'readonly')
@@ -164,7 +167,7 @@ export const get = <StoreC extends t.Mixed>(
         );
       });
       handleRequestError(getRequest, reject);
-    }),
+    })),
     handlePromiseError,
   );
 
@@ -174,11 +177,11 @@ export const remove = <StoreC extends t.Mixed>(
   storeName: string,
 ) => (v: IDBValidKey): TE.TaskEither<IndexedDbError, boolean> =>
   TE.tryCatch(
-    () => new Promise<boolean>((resolve, reject) => {
+    () => mutex.runExclusive(() => new Promise<boolean>((resolve, reject) => {
       const removeRequest = getObjectStore(db, 'readwrite')(storeName).delete(v);
       removeRequest.addEventListener('success', () => resolve(true));
       handleRequestError(removeRequest, reject);
-    }),
+    })),
     handlePromiseError,
   );
 
@@ -187,10 +190,10 @@ export const clearStore = <StoreC extends t.Mixed>(
   storeName: string,
 ): TE.TaskEither<IndexedDbError, boolean> =>
   TE.tryCatch(
-    () => new Promise<boolean>((resolve, reject) => {
+    () => mutex.runExclusive(() => new Promise<boolean>((resolve, reject) => {
       const clearRequest = getObjectStore(db, 'readwrite')(storeName).clear();
       clearRequest.addEventListener('success', () => resolve(true));
       handleRequestError(clearRequest, reject);
-    }),
+    })),
     handlePromiseError,
   );

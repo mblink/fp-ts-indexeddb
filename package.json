@@ -48,6 +48,7 @@
     "typescript": "~3.8.3"
   },
   "peerDependencies": {
+    "async-mutex": ">= 0.5.0",
     "fp-ts": ">= 2.10.0",
     "io-ts": ">= 2.0.6"
   }
