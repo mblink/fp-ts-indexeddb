@@ -7,8 +7,8 @@ import * as t from 'io-ts';
 import type { ReadonlyRecord } from 'fp-ts/lib/ReadonlyRecord';
 import { pipe } from 'fp-ts/lib/function';
 
-type StoreName = string;
-type Store<StoreC extends t.Mixed> = { key: string, codec: StoreC };
+export type StoreName = string;
+export type Store<StoreC extends t.Mixed> = { key: string, codec: StoreC };
 
 export type DBSchema<StoreC extends t.Mixed> = {
   version: number;
@@ -32,9 +32,9 @@ const findStore = <StoreC extends t.Mixed>(db: DatabaseInfo<StoreC>, storeName: 
   R.lookup(storeName)
 );
 
-const handleRequestError = <A>(req: IDBRequest<A>, fn: (error: O.Option<DOMException>) => void) => {
+const handleRequestError = <A>(req: IDBRequest<A>, fn: (error: DOMException | null) => void) => {
   req.addEventListener('error', function (this: IDBOpenDBRequest) {
-    fn(O.fromNullable(this.error));
+    fn(this.error);
   });
 };
 
