@@ -1,6 +1,6 @@
 {
   "name": "fp-ts-indexeddb",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Simple FP-TS based wrapper around indexedDB",
   "main": "dist/lib/index.js",
   "module": "dist/es2015/index.js",
