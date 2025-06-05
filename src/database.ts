@@ -47,7 +47,10 @@ export const open = <StoreC extends t.Mixed>(
     const req = window.indexedDB.open(dbName, schema.version);
     req.onupgradeneeded = () => pipe(
       schema.stores,
-      R.mapWithIndex((storeName: string, v: Store<StoreC>) => req.result.createObjectStore(storeName, { keyPath: v.key }))
+      R.mapWithIndex((storeName: string, v: Store<StoreC>) => {
+        req.result.objectStoreNames.contains(storeName) && req.result.deleteObjectStore(storeName);
+        req.result.createObjectStore(storeName, { keyPath: v.key });
+      })
     );
 
     req.onsuccess = () => resolve({ database: req.result, schema: schema });
@@ -194,3 +197,5 @@ export const clearStore = <StoreC extends t.Mixed>(
     }),
     handlePromiseError,
   );
+
+export const close = <StoreC extends t.Mixed>(db: DatabaseInfo<StoreC>): void => db.database.close();

@@ -4,6 +4,7 @@ import * as t from 'io-ts';
 
 import {
   DBSchema,
+  close,
   get,
   getAll,
   insert,
@@ -20,7 +21,7 @@ const userC = t.type({
 type UserC = typeof userC;
 type User = t.TypeOf<UserC>;
 
-const schema: DBSchema<UserC> = {
+const schema1: DBSchema<UserC> = {
   version: 1,
   stores: {
     'users': {
@@ -29,6 +30,7 @@ const schema: DBSchema<UserC> = {
     }
   }
 };
+const schema2: DBSchema<UserC> = { ...schema1, version: 2 };
 
 const dbErrorTe = TE.left(new DOMException('Error loading database'));
 
@@ -36,7 +38,7 @@ describe('IndexedDb - Tests', () => {
   it('Crud - Functions', async () => {
     // Set Database
     await pipe(
-      open('my-db31', schema),
+      open('my-db31', schema1),
       TE.match(
         fail,
         async (db) => {
@@ -68,7 +70,7 @@ describe('IndexedDb - Tests', () => {
               (rows) => {
                 expect(rows.length).toBeGreaterThanOrEqual(1);
                 pipe(
-                  O.fromNullable(schema.stores.users?.codec),
+                  O.fromNullable(schema1.stores.users?.codec),
                   O.map((c) => {
                     expect(t.array(c).is(rows)).toBeTruthy();
                   })
@@ -107,7 +109,20 @@ describe('IndexedDb - Tests', () => {
               },
             )
           )();
+
+          close(db);
         },
+      ),
+    )();
+
+    // Upgrade schema
+    await pipe(
+      open('my-db31', schema2),
+      TE.match(
+        fail,
+        (db) => {
+          expect(db.schema.version).toEqual(schema2.version);
+        }
       )
     )();
   });
